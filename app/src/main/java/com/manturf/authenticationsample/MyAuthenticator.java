@@ -63,7 +63,44 @@ public class MyAuthenticator extends AbstractAccountAuthenticator {
     public Bundle getAuthToken(AccountAuthenticatorResponse response,
                                Account account, String authTokenType,
                                Bundle options) throws NetworkErrorException {
-        AccountManager manager = AccountManager.get(mContext);
+        Bundle result = new Bundle();
+
+        if (!authTokenType.equals(AUTH_TOKEN_TYPE_READ_ONLY) && !authTokenType.equals(AUTH_TOKEN_TYPE_FULL_ACCESS)) {
+            result.putInt(AccountManager.KEY_ERROR_CODE, ERR_INVALID_AUTH_TOKEN_TYPE);
+            result.putString(AccountManager.KEY_ERROR_MESSAGE, "invalid authTokenType: "+ authTokenType);
+        } else {
+            final AccountManager manager = AccountManager.get(mContext);
+            String authToken = manager.peekAuthToken(account, authTokenType);
+
+            // 認証トークンが存在しない場合で、かつパスワードがアカウントに紐付いている場合は、それを使って認証トークンを取得しなおします
+            if (authToken == null || authToken.isEmpty()) {
+                final String password = manager.getPassword(account);
+                if (password != null) {
+                    // TODO:サーバーに接続して認証トークンを取得します
+                    authToken = "AuthToken";
+                }
+            }
+
+            // 認証トークンが存在する場合は、その情報を返します
+            if (authToken != null && !authToken.isEmpty()) {
+                result.putString(AccountManager.KEY_ACCOUNT_NAME, account.name);
+                result.putString(AccountManager.KEY_ACCOUNT_TYPE, account.type);
+                result.putString(AccountManager.KEY_AUTHTOKEN, authToken);
+            } else {
+                // ユーザーに認証情報を入力してもらう必要がある場合は、addAccount のときと同様に Authenticator Activity を起動します
+                final Intent intent = new Intent(mContext, LoginActivity.class);
+
+                // ここで、Authenticator Acitivity に必要な情報をセットします。
+                // 作成したアカウントは response 経由で伝達するので必ずセットしておきます
+                intent.putExtra(AccountManager.KEY_ACCOUNT_AUTHENTICATOR_RESPONSE, response);
+
+                // 戻り値には KEY_INTENT が含まれていれば十分です。
+                result.putParcelable(AccountManager.KEY_INTENT, intent);
+            }
+        }
+        return result;
+
+        /*AccountManager manager = AccountManager.get(mContext);
         String name = account.name;
 
         // TODO:本来は暗号化の必要あり
@@ -79,7 +116,7 @@ public class MyAuthenticator extends AbstractAccountAuthenticator {
         result.putString(AccountManager.KEY_ACCOUNT_NAME, name);
         result.putString(AccountManager.KEY_ACCOUNT_TYPE, ACCOUNT_TYPE);
         result.putString(AccountManager.KEY_AUTHTOKEN, authToken);
-        return result;
+        return result;*/
     }
 
     @Override
